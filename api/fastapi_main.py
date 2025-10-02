@@ -2,7 +2,8 @@ import os
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-import moviepy.editor as moviepy
+# import moviepy.editor as moviepy
+from moviepy import editor as moviepy
 import uvicorn
 import numpy as np
 import tensorflow as tf
