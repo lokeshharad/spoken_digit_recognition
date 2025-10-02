@@ -3,7 +3,9 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 # import moviepy.editor as moviepy
-from moviepy import editor as moviepy
+# from moviepy import editor as moviepy
+from moviepy.editor import AudioFileClip
+
 import uvicorn
 import numpy as np
 import tensorflow as tf
@@ -152,7 +154,7 @@ async def predict(file: UploadFile = File(...)):
         f.write(await file.read())
     print("file path  is", file_path)
     wav_path = os.path.join(UPLOAD_DIR, "converted.wav")
-    clip = moviepy.AudioFileClip(file_path)
+    clip = AudioFileClip(file_path)
     clip.write_audiofile(wav_path)
 
     # Preprocess and predict
