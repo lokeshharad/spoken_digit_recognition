@@ -1,8 +1,10 @@
 fastapi
 uvicorn
 pydantic
-moviepy
+
 librosa
 numpy
 tensorflow
 plotly
+
+python-multipart

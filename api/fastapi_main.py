@@ -2,17 +2,12 @@ import os
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-# import moviepy.editor as moviepy
-# from moviepy import editor as moviepy
-from moviepy.editor import AudioFileClip
-
 import uvicorn
 import numpy as np
 import tensorflow as tf
 import plotly.graph_objs as go
 from src.feature_extractor import extract_mel_spectrogram
 import librosa
-# from pydub import AudioSegment
 
 # Load model
 MODEL_PATH = "models/best_model.h5"
@@ -84,65 +79,118 @@ def index():
 
 
         <script>
-            let mediaRecorder;
-            let audioChunks = [];
-            let interval;
-            let seconds = 0;
-            const recordButton = document.getElementById('recordButton');
-            const stopButton = document.getElementById('stopButton');
-            const progressBar = document.getElementById('progressBar');
-            const timer = document.getElementById('timer');
+let mediaRecorder;
+let audioChunks = [];
+let interval;
+let seconds = 0;
+const recordButton = document.getElementById('recordButton');
+const stopButton = document.getElementById('stopButton');
+const progressBar = document.getElementById('progressBar');
+const timer = document.getElementById('timer');
 
-            function updateProgress() {
-                seconds++;
-                const mins = String(Math.floor(seconds/60)).padStart(2,'0');
-                const secs = String(seconds%60).padStart(2,'0');
-                timer.textContent = `${mins}:${secs}`;
-                progressBar.style.width = Math.min((seconds/60)*100, 100) + '%'; // 1 min max
-            }
+function updateProgress() {
+    seconds++;
+    const mins = String(Math.floor(seconds/60)).padStart(2,'0');
+    const secs = String(seconds%60).padStart(2,'0');
+    timer.textContent = `${mins}:${secs}`;
+    progressBar.style.width = Math.min((seconds/60)*100, 100) + '%';
+}
 
-            recordButton.addEventListener('click', async () => {
-                audioChunks = [];
-                seconds = 0;
-                progressBar.style.width = '0%';
-                timer.textContent = '00:00';
+// Function to convert Blob to WAV at 8kHz
+async function convertWebMToWav(webmBlob) {
+    const arrayBuffer = await webmBlob.arrayBuffer();
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                    mediaRecorder.start();
+    // Create WAV file from AudioBuffer
+    const numOfChan = audioBuffer.numberOfChannels;
+    const length = audioBuffer.length * numOfChan * 2 + 44;
+    const buffer = new ArrayBuffer(length);
+    const view = new DataView(buffer);
 
-                    interval = setInterval(updateProgress, 1000);
+    // WAV header
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+    }
 
-                    recordButton.disabled = true;
-                    stopButton.disabled = false;
-                } catch(err) {
-                    alert("Microphone access denied or not supported: " + err);
-                }
-            });
+    let offset = 0;
+    writeString(view, offset, 'RIFF'); offset += 4;
+    view.setUint32(offset, 36 + audioBuffer.length * numOfChan * 2, true); offset += 4;
+    writeString(view, offset, 'WAVE'); offset += 4;
+    writeString(view, offset, 'fmt '); offset += 4;
+    view.setUint32(offset, 16, true); offset += 4;
+    view.setUint16(offset, 1, true); offset += 2;
+    view.setUint16(offset, numOfChan, true); offset += 2;
+    view.setUint32(offset, audioBuffer.sampleRate, true); offset += 4;
+    view.setUint32(offset, audioBuffer.sampleRate * numOfChan * 2, true); offset += 4;
+    view.setUint16(offset, numOfChan * 2, true); offset += 2;
+    view.setUint16(offset, 16, true); offset += 2;
+    writeString(view, offset, 'data'); offset += 4;
+    view.setUint32(offset, audioBuffer.length * numOfChan * 2, true); offset += 4;
 
-            stopButton.addEventListener('click', () => {
-                if (!mediaRecorder) return;
-                mediaRecorder.stop();
-                clearInterval(interval);
+    // Write PCM samples
+    const interleaved = new Float32Array(audioBuffer.length * numOfChan);
+    for (let c = 0; c < numOfChan; c++) {
+        const channelData = audioBuffer.getChannelData(c);
+        for (let i = 0; i < channelData.length; i++) {
+            interleaved[i * numOfChan + c] = channelData[i];
+        }
+    }
 
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const formData = new FormData();
-                    formData.append("file", audioBlob, "recorded.webm");
+    let index = 44;
+    for (let i = 0; i < interleaved.length; i++, index += 2) {
+        let s = Math.max(-1, Math.min(1, interleaved[i]));
+        view.setInt16(index, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
 
-                    const response = await fetch("/predict", { method: "POST", body: formData });
-                    const html = await response.text();
-                    document.open();
-                    document.write(html);
-                    document.close();
-                };
+    return new Blob([view], { type: 'audio/wav' });
+}
 
-                recordButton.disabled = false;
-                stopButton.disabled = true;
-            });
-        </script>
+recordButton.addEventListener('click', async () => {
+    audioChunks = [];
+    seconds = 0;
+    progressBar.style.width = '0%';
+    timer.textContent = '00:00';
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.start();
+
+        interval = setInterval(updateProgress, 1000);
+
+        recordButton.disabled = true;
+        stopButton.disabled = false;
+    } catch(err) {
+        alert("Microphone access denied or not supported: " + err);
+    }
+});
+
+stopButton.addEventListener('click', async () => {
+    if (!mediaRecorder) return;
+    mediaRecorder.stop();
+    clearInterval(interval);
+
+    mediaRecorder.onstop = async () => {
+        const webmBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const wavBlob = await convertWebMToWav(webmBlob);
+
+        const formData = new FormData();
+        formData.append("file", wavBlob, "recorded.wav");
+
+        const response = await fetch("/predict", { method: "POST", body: formData });
+        const html = await response.text();
+        document.open();
+        document.write(html);
+        document.close();
+    };
+
+    recordButton.disabled = false;
+    stopButton.disabled = true;
+});
+</script>
+
     </body>
     </html>
     """
@@ -153,18 +201,14 @@ async def predict(file: UploadFile = File(...)):
     with open(file_path, "wb") as f:
         f.write(await file.read())
     print("file path  is", file_path)
-    wav_path = os.path.join(UPLOAD_DIR, "converted.wav")
-    clip = AudioFileClip(file_path)
-    clip.write_audiofile(wav_path)
-
     # Preprocess and predict
-    x = extract_mel_spectrogram(wav_path)
+    x = extract_mel_spectrogram(file_path)
     x = np.expand_dims(x, axis=0)
     preds = model.predict(x)
     predicted_class = np.argmax(preds, axis=1)[0]
 
     # Generate waveform plot
-    waveform_div = get_waveform_plot(wav_path, sr=8000)
+    waveform_div = get_waveform_plot(file_path, sr=8000)
 
     return f"""<html>
 <head>
