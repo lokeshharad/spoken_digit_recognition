@@ -9,7 +9,7 @@ import tensorflow as tf
 import plotly.graph_objs as go
 from src.feature_extractor import extract_mel_spectrogram
 import librosa
-from pydub import AudioSegment
+# from pydub import AudioSegment
 
 # Load model
 MODEL_PATH = "models/best_model.h5"
