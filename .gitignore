@@ -1,0 +1,10 @@
+# Ignore data directory
+data/
+sdr_env/
+mlruns/
+__pycache__/
+uploads/
+notebooks/
+scripts/
+app/
+tests/
