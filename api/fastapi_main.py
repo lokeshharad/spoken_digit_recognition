@@ -6,7 +6,7 @@ import uvicorn
 import numpy as np
 import tensorflow as tf
 import plotly.graph_objs as go
-from src.feature_extractor import extract_mel_spectrogram
+from feature_extractor import extract_mel_spectrogram
 import librosa
 
 # Load model
@@ -227,5 +227,5 @@ async def predict(file: UploadFile = File(...)):
 </body>
 </html>
 """
-# if __name__ == "__main__":
-#     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
