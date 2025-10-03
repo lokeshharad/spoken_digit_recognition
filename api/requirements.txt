@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+
+librosa
+numpy
+tensorflow
+plotly
+
+python-multipart
